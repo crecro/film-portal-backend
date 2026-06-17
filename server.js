@@ -37,33 +37,7 @@ app.post("/login", (req, res) => {
   });
 });
 
-// --- FILM MANAGEMENT ---
-app.get("/films", (req, res) => {
-  db.query("SELECT * FROM films", (err, result) => {
-    if (err) res.status(500).send(err);
-    else res.json(result);
-  });
-});
-
-app.post("/films", async (req, res) => {
-  const { title, genre, director, year_released, description, rating, film_url } = req.body;
-  let image_url = ""; 
-
-  // 🚨 TYPE YOUR OMDB API KEY HERE 🚨
-  const API_KEY = "e859f935";
-  
-  try {
-    const omdbResponse = await fetch(`http://www.omdbapi.com/?apikey=${API_KEY}&t=${encodeURIComponent(title)}`);
-    const omdbData = await omdbResponse.json();
-    if (omdbData.Response === "True" && omdbData.Poster !== "N/A") image_url = omdbData.Poster;
-
-    const sql = `INSERT INTO films (title, genre, director, year_released, description, rating, image_url, film_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-    db.query(sql, [title, genre, director, year_released, description, rating, image_url, film_url || "#"], (err) => {
-      if (err) res.status(500).send("Database Insertion Error");
-      else res.send("Film Added Successfully");
-    });
-  } catch (error) { res.status(500).send("Failed to fetch poster"); }
-});
+https://film-portal-api.onrender.com/films
 
 // --- RECOMMENDATION ALGORITHM ---
 app.get("/films/recommend/:id", (req, res) => {
