@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
-const db = require("./db"); // Ensure your db.js is correctly configured
+const db = require("./db"); 
 
 const app = express();
 
@@ -37,7 +37,30 @@ app.post("/login", (req, res) => {
   });
 });
 
-https://film-portal-api.onrender.com/films
+// --- FILM MANAGEMENT ---
+app.get("/films", (req, res) => {
+  db.query("SELECT * FROM films", (err, result) => {
+    if (err) res.status(500).send("Database error");
+    else res.json(result);
+  });
+});
+
+app.post("/films", async (req, res) => {
+  const { title, genre, director, year_released, description, rating, film_url } = req.body;
+  const API_KEY = "e859f935";
+  
+  try {
+    const omdbResponse = await fetch(`http://www.omdbapi.com/?apikey=${API_KEY}&t=${encodeURIComponent(title)}`);
+    const omdbData = await omdbResponse.json();
+    let image_url = (omdbData.Response === "True" && omdbData.Poster !== "N/A") ? omdbData.Poster : "default_image_url_here";
+
+    const sql = `INSERT INTO films (title, genre, director, year_released, description, rating, image_url, film_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    db.query(sql, [title, genre, director, year_released, description, rating, image_url, film_url || "#"], (err) => {
+      if (err) res.status(500).send("Database Insertion Error");
+      else res.send("Film Added Successfully");
+    });
+  } catch (error) { res.status(500).send("Failed to fetch poster"); }
+});
 
 // --- RECOMMENDATION ALGORITHM ---
 app.get("/films/recommend/:id", (req, res) => {
@@ -49,20 +72,17 @@ app.get("/films/recommend/:id", (req, res) => {
     const targetFilm = results.find((f) => String(f.id) === targetId);
     if (!targetFilm) return res.status(404).send("Film not found");
 
-    // Group 1: Exact Same Director (excluding the selected film)
     const byDirector = results.filter(f => 
       String(f.id) !== targetId && 
       f.director === targetFilm.director
-    ).slice(0, 4); // Show top 4
+    ).slice(0, 4);
 
-    // Group 2: Same Genre (excluding selected film AND avoiding duplicates from the director list)
     const byGenre = results.filter(f => 
       String(f.id) !== targetId && 
       f.genre === targetFilm.genre &&
-      f.director !== targetFilm.director // Don't show the same film in both rows
-    ).slice(0, 4); // Show top 4
+      f.director !== targetFilm.director 
+    ).slice(0, 4);
 
-    // Send the grouped data back to React
     res.json({
       director: targetFilm.director,
       genre: targetFilm.genre,
@@ -71,7 +91,6 @@ app.get("/films/recommend/:id", (req, res) => {
     });
   });
 });
-
 
 // --- COLLECTIONS & REVIEWS ---
 app.get("/collections/:userId", (req, res) => {
