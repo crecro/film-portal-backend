@@ -103,16 +103,28 @@ app.post("/collections", (req, res) => {
     [req.body.user_id, req.body.film_id], () => res.send("Added"));
 });
 
+// UPDATED REVIEW ROUTE WITH ERROR HANDLING
 app.post("/reviews", (req, res) => {
-  db.query("INSERT INTO reviews (user_id, film_id, rating, review_text) VALUES (?, ?, ?, ?)", 
-    [req.body.user_id, req.body.film_id, req.body.rating, req.body.review_text], () => res.send("Review added"));
+  const { user_id, film_id, rating, review_text } = req.body;
+  const sql = "INSERT INTO reviews (user_id, film_id, rating, review_text) VALUES (?, ?, ?, ?)";
+  
+  db.query(sql, [user_id, film_id, rating, review_text], (err, result) => {
+    if (err) {
+      console.error("Database error in /reviews:", err);
+      return res.status(500).json({ error: "Database operation failed", details: err.message });
+    }
+    res.status(201).send("Review added successfully");
+  });
 });
 
 app.get("/reviews", (req, res) => {
   const sql = `SELECT reviews.*, users.email, films.title, films.image_url FROM reviews 
                JOIN users ON reviews.user_id = users.id 
                JOIN films ON reviews.film_id = films.id ORDER BY reviews.created_at DESC`;
-  db.query(sql, (err, results) => { res.json(results); });
+  db.query(sql, (err, results) => { 
+    if (err) return res.status(500).send("Database error");
+    res.json(results); 
+  });
 });
 
 app.listen(5000, () => {
