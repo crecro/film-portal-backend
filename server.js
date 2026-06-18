@@ -9,9 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 // --- BASE ROUTE ---
-app.get("/", (req, res) => {
-  res.send("Film Recommendation API Running");
-});
+app.get("/", (req, res) => { res.send("Film Recommendation API Running"); });
 
 // --- AUTH ROUTES ---
 app.post("/register", async (req, res) => {
@@ -32,8 +30,11 @@ app.post("/login", (req, res) => {
   db.query(sql, [email], async (err, results) => {
     if (err || results.length === 0) return res.status(404).send("User not found");
     const isMatch = await bcrypt.compare(password, results[0].password);
-    if (isMatch) res.json({ userId: results[0].id, email: results[0].email });
-    else res.status(401).send("Invalid credentials");
+    if (isMatch) {
+      // NEW: Check if this user is the Admin
+      const isAdmin = email.toLowerCase() === "admin@film.com";
+      res.json({ userId: results[0].id, email: results[0].email, isAdmin: isAdmin });
+    } else res.status(401).send("Invalid credentials");
   });
 });
 
@@ -48,7 +49,6 @@ app.get("/films", (req, res) => {
 app.post("/films", async (req, res) => {
   const { title, genre, director, year_released, description, rating, film_url } = req.body;
   const API_KEY = "e859f935";
-  
   try {
     const omdbResponse = await fetch(`http://www.omdbapi.com/?apikey=${API_KEY}&t=${encodeURIComponent(title)}`);
     const omdbData = await omdbResponse.json();
@@ -62,33 +62,34 @@ app.post("/films", async (req, res) => {
   } catch (error) { res.status(500).send("Failed to fetch poster"); }
 });
 
+// NEW: Delete a film (Admin Only from frontend)
+app.delete("/films/:id", (req, res) => {
+  db.query("DELETE FROM films WHERE id = ?", [req.params.id], (err) => {
+    if (err) return res.status(500).send("Error deleting film");
+    res.send("Film deleted");
+  });
+});
+
+// NEW: Update film description (Admin Only from frontend)
+app.put("/films/:id", (req, res) => {
+  db.query("UPDATE films SET description = ? WHERE id = ?", [req.body.description, req.params.id], (err) => {
+    if (err) return res.status(500).send("Error updating film");
+    res.send("Film updated");
+  });
+});
+
 // --- RECOMMENDATION ALGORITHM ---
 app.get("/films/recommend/:id", (req, res) => {
   const targetId = String(req.params.id);
-  
   db.query("SELECT * FROM films", (err, results) => {
     if (err) return res.status(500).send("Database error");
-    
     const targetFilm = results.find((f) => String(f.id) === targetId);
     if (!targetFilm) return res.status(404).send("Film not found");
 
-    const byDirector = results.filter(f => 
-      String(f.id) !== targetId && 
-      f.director === targetFilm.director
-    ).slice(0, 4);
+    const byDirector = results.filter(f => String(f.id) !== targetId && f.director === targetFilm.director).slice(0, 4);
+    const byGenre = results.filter(f => String(f.id) !== targetId && f.genre === targetFilm.genre && f.director !== targetFilm.director).slice(0, 4);
 
-    const byGenre = results.filter(f => 
-      String(f.id) !== targetId && 
-      f.genre === targetFilm.genre &&
-      f.director !== targetFilm.director 
-    ).slice(0, 4);
-
-    res.json({
-      director: targetFilm.director,
-      genre: targetFilm.genre,
-      byDirector: byDirector,
-      byGenre: byGenre
-    });
+    res.json({ director: targetFilm.director, genre: targetFilm.genre, byDirector: byDirector, byGenre: byGenre });
   });
 });
 
@@ -103,11 +104,18 @@ app.post("/collections", (req, res) => {
     [req.body.user_id, req.body.film_id], () => res.send("Added"));
 });
 
-// UPDATED REVIEW ROUTE WITH ERROR HANDLING
+// NEW: Remove from collections
+app.delete("/collections/:userId/:filmId", (req, res) => {
+  db.query("DELETE FROM collections WHERE user_id = ? AND film_id = ?", 
+    [req.params.userId, req.params.filmId], (err) => {
+      if (err) return res.status(500).send("Error removing from collection");
+      res.send("Removed");
+  });
+});
+
 app.post("/reviews", (req, res) => {
   const { user_id, film_id, rating, review_text } = req.body;
   const sql = "INSERT INTO reviews (user_id, film_id, rating, review_text) VALUES (?, ?, ?, ?)";
-  
   db.query(sql, [user_id, film_id, rating, review_text], (err, result) => {
     if (err) {
       console.error("Database error in /reviews:", err);
@@ -127,6 +135,4 @@ app.get("/reviews", (req, res) => {
   });
 });
 
-app.listen(5000, () => {
-  console.log("Server Running On Port 5000");
-});
+app.listen(5000, () => { console.log("Server Running On Port 5000"); });
