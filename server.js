@@ -31,9 +31,9 @@ app.post("/login", (req, res) => {
     if (err || results.length === 0) return res.status(404).send("User not found");
     const isMatch = await bcrypt.compare(password, results[0].password);
     if (isMatch) {
-      // NEW: Check if this user is the Admin
       const isAdmin = email.toLowerCase() === "admin@film.com";
-      res.json({ userId: results[0].id, email: results[0].email, isAdmin: isAdmin });
+      // BUG FIX: Changed 'userId' to 'id' to match the frontend expectations!
+      res.json({ id: results[0].id, email: results[0].email, isAdmin: isAdmin });
     } else res.status(401).send("Invalid credentials");
   });
 });
@@ -62,7 +62,6 @@ app.post("/films", async (req, res) => {
   } catch (error) { res.status(500).send("Failed to fetch poster"); }
 });
 
-// NEW: Delete a film (Admin Only from frontend)
 app.delete("/films/:id", (req, res) => {
   db.query("DELETE FROM films WHERE id = ?", [req.params.id], (err) => {
     if (err) return res.status(500).send("Error deleting film");
@@ -70,7 +69,6 @@ app.delete("/films/:id", (req, res) => {
   });
 });
 
-// NEW: Update film description (Admin Only from frontend)
 app.put("/films/:id", (req, res) => {
   db.query("UPDATE films SET description = ? WHERE id = ?", [req.body.description, req.params.id], (err) => {
     if (err) return res.status(500).send("Error updating film");
@@ -104,7 +102,6 @@ app.post("/collections", (req, res) => {
     [req.body.user_id, req.body.film_id], () => res.send("Added"));
 });
 
-// NEW: Remove from collections
 app.delete("/collections/:userId/:filmId", (req, res) => {
   db.query("DELETE FROM collections WHERE user_id = ? AND film_id = ?", 
     [req.params.userId, req.params.filmId], (err) => {
